@@ -1,4 +1,5 @@
 import json
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -14,6 +15,11 @@ router = APIRouter(prefix="/projects/{project_id}/tutor", tags=["tutor"])
 # per the PRD's "persistent but relevant" context principle.
 RECENT_TURNS = 4
 
+# A bare greeting isn't a question about the material -- answering it with a
+# stiff "insufficient evidence" warning (or spending an AI call on it) is bad
+# UX. Short-circuit it with a friendly nudge instead.
+_GREETING_RE = re.compile(r"^\s*(hi+|hello+|hey+|yo|sup|good\s*(morning|afternoon|evening))\s*[!.?]*\s*$", re.I)
+
 
 @router.post("/ask", response_model=schemas.TutorAskResponse)
 def ask_tutor(project_id: int, payload: schemas.TutorAskRequest, db: Session = Depends(get_db),
@@ -22,6 +28,15 @@ def ask_tutor(project_id: int, payload: schemas.TutorAskRequest, db: Session = D
 
     db.add(models.ConversationMessage(project_id=project.id, role="user", content=payload.question))
     db.commit()
+
+    if _GREETING_RE.match(payload.question):
+        answer = "Hi! Ask me anything about the material you've uploaded to this project, and I'll answer using it with citations."
+        db.add(models.ConversationMessage(
+            project_id=project.id, role="assistant", content=answer,
+            citations="[]", insufficient_evidence=False,
+        ))
+        db.commit()
+        return schemas.TutorAskResponse(answer=answer, citations=[], insufficient_evidence=False)
 
     recent = (
         db.query(models.ConversationMessage)
