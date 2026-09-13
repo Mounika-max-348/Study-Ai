@@ -64,26 +64,43 @@ function toast(msg, isError) {
   el._t = setTimeout(() => { el.style.display = "none"; }, 4200);
 }
 
-/* ---------------- Landing ---------------- */
-function showLanding() {
-  document.getElementById("landing-shell").style.display = "flex";
-  document.getElementById("auth-shell").style.display = "none";
-  document.getElementById("shell").style.display = "none";
-}
-
-function showAuth(tab) {
-  document.getElementById("landing-shell").style.display = "none";
-  document.getElementById("auth-shell").style.display = "flex";
-  document.getElementById("shell").style.display = "none";
-  switchAuthTab(tab || "login");
-}
-
-function initLandingScreen() {
-  document.getElementById("landing-start-btn").onclick = () => showAuth("register");
-  document.getElementById("landing-login-btn").onclick = () => showAuth("login");
-  document.getElementById("landing-login-btn-2").onclick = () => showAuth("login");
-  document.getElementById("landing-admin-hint-btn").onclick = () => showAuth("register");
-  document.getElementById("auth-back-btn").onclick = () => showLanding();
+// Generic modal: shows a small card with title/subtitle, custom field HTML, and
+// a submit handler. Returns nothing; the caller wires up submit via the fields.
+function showModal({ title, subtitle, fieldsHtml, submitLabel, onSubmit }) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-card">
+      <div class="modal-card__header">
+        <h3>${escapeHtml(title)}</h3>
+        ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+      </div>
+      <form id="modal-form">
+        <div class="modal-card__body">${fieldsHtml}</div>
+        <div class="modal-card__actions">
+          <button type="button" class="btn secondary btn-sm" id="modal-cancel">Cancel</button>
+          <button type="submit" class="btn btn-sm" id="modal-submit">${escapeHtml(submitLabel)}</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("#modal-cancel").onclick = close;
+  overlay.querySelector("#modal-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const submitBtn = overlay.querySelector("#modal-submit");
+    submitBtn.disabled = true;
+    try {
+      await onSubmit(new FormData(e.target), close);
+    } catch (err) {
+      toast(err.message, true);
+      submitBtn.disabled = false;
+    }
+  };
+  const firstInput = overlay.querySelector("input, textarea");
+  if (firstInput) firstInput.focus();
 }
 
 /* ---------------- Auth ---------------- */
@@ -129,12 +146,12 @@ async function doAuth(path, body) {
 function logout() {
   state.token = null; state.user = null;
   localStorage.removeItem("sc_token"); localStorage.removeItem("sc_user");
-  showLanding();
+  document.getElementById("shell").style.display = "none";
+  document.getElementById("auth-shell").style.display = "flex";
 }
 
 /* ---------------- Boot / shell ---------------- */
 async function boot() {
-  document.getElementById("landing-shell").style.display = "none";
   document.getElementById("auth-shell").style.display = "none";
   document.getElementById("shell").style.display = "flex";
   document.getElementById("user-line").textContent = state.user.full_name || state.user.email;
@@ -186,27 +203,57 @@ function renderSidebar() {
   });
 }
 
-async function createSpaceFlow() {
-  const name = prompt("Space name (e.g. 'Machine Learning', 'AWS Certification')");
-  if (!name) return;
-  const description = prompt("One-line description (optional)") || "";
-  try {
-    await api("POST", "/spaces", { name, description });
-    toast("Space created");
-    await loadSpaces();
-  } catch (e) { toast(e.message, true); }
+function createSpaceFlow() {
+  showModal({
+    title: "New space",
+    subtitle: "A broad area you're studying, e.g. \"Machine Learning\" or \"AWS Certification\".",
+    submitLabel: "Create space",
+    fieldsHtml: `
+      <div class="field">
+        <label>Space name</label>
+        <input name="name" placeholder="e.g. Machine Learning" required autocomplete="off">
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Description (optional)</label>
+        <input name="description" placeholder="One line about this space" autocomplete="off">
+      </div>
+    `,
+    onSubmit: async (fd, close) => {
+      const name = fd.get("name").trim();
+      if (!name) return;
+      await api("POST", "/spaces", { name, description: (fd.get("description") || "").trim() });
+      close();
+      toast("Space created");
+      await loadSpaces();
+    },
+  });
 }
 
-async function createProjectFlow(spaceId) {
-  const name = prompt("Project name (a focused learning journey within this space)");
-  if (!name) return;
-  const goal = prompt("What's the learning goal?") || "";
-  try {
-    const p = await api("POST", "/projects", { space_id: spaceId, name, description: "", goal });
-    toast("Project created");
-    await loadSpaces();
-    openProject(p.id);
-  } catch (e) { toast(e.message, true); }
+function createProjectFlow(spaceId) {
+  showModal({
+    title: "New project",
+    subtitle: "A focused learning goal inside this space, isolated from your other projects.",
+    submitLabel: "Create project",
+    fieldsHtml: `
+      <div class="field">
+        <label>Project name</label>
+        <input name="name" placeholder="e.g. Understand Gradient Descent" required autocomplete="off">
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Learning goal (optional)</label>
+        <input name="goal" placeholder="What do you want to be able to do?" autocomplete="off">
+      </div>
+    `,
+    onSubmit: async (fd, close) => {
+      const name = fd.get("name").trim();
+      if (!name) return;
+      const p = await api("POST", "/projects", { space_id: spaceId, name, description: "", goal: (fd.get("goal") || "").trim() });
+      close();
+      toast("Project created");
+      await loadSpaces();
+      openProject(p.id);
+    },
+  });
 }
 
 async function openProject(projectId) {
@@ -231,6 +278,10 @@ function render() {
 document.querySelectorAll(".navlink").forEach(() => {}); // no-op, nav lives in sidebar now
 
 /* ---------------- Home ---------------- */
+// A small deterministic accent color per space, purely visual (project cards).
+const CARD_ACCENTS = ["#3F6B4A", "#B8763A", "#3A6B85", "#8A6A2E", "#6B4A8A", "#4B7A5A"];
+function accentFor(id) { return CARD_ACCENTS[id % CARD_ACCENTS.length]; }
+
 async function renderHome() {
   document.getElementById("crumb").textContent = "";
   document.getElementById("page-title").textContent = "Home";
@@ -240,6 +291,10 @@ async function renderHome() {
   const allProjects = Object.values(state.projectsBySpace).flat();
   if (!allProjects.length) {
     content.innerHTML = `
+      <div class="home-hero">
+        <h2>Your learning workspace</h2>
+        <p>Create a space, then a project inside it, to start learning from your own material.</p>
+      </div>
       <div class="empty-state">
         <h2>Nothing here yet</h2>
         <p>Create a space, then a project inside it, to start learning.</p>
@@ -283,11 +338,12 @@ async function renderHome() {
       </div>
     </div>
 
-    <div class="panel">
-      <h3>All projects</h3>
+    <h3 style="margin-top:1.4rem">All projects</h3>
+    <div class="project-card-grid">
       ${allProjects.map(p => `
-        <div class="material-item">
-          <div class="material-name">${escapeHtml(p.name)}</div>
+        <div class="project-card" style="--accent: ${accentFor(p.id)}">
+          <div class="project-card__name">${escapeHtml(p.name)}</div>
+          <div class="project-card__goal">${escapeHtml(p.goal || p.description || "No goal set yet")}</div>
           <button class="btn secondary btn-sm" data-open="${p.id}">Open</button>
         </div>`).join("")}
     </div>
@@ -382,16 +438,16 @@ async function renderOverviewTab(project) {
   `;
 }
 
-/* ---- Materials ---- */
+/* ---- Materials: rendered as a library card-catalog index ---- */
 async function renderMaterialsTab(project) {
   const content = document.getElementById("content");
   content.innerHTML = `
     <div class="upload-dropzone" id="dropzone">
-      <p style="margin-bottom:.6em"><strong>Upload a PDF</strong> to build this project's knowledge base.</p>
+      <p style="margin-bottom:.6em"><strong>Upload a PDF</strong> to add it to this project's library.</p>
       <input type="file" id="file-input" accept="application/pdf">
       <button class="btn btn-sm" id="pick-file-btn">Choose PDF file</button>
     </div>
-    <div id="materials-index"><div class="loading">Loading materials…</div></div>
+    <div id="library-index"><div class="loading">Loading library…</div></div>
   `;
   document.getElementById("pick-file-btn").onclick = () => document.getElementById("file-input").click();
   document.getElementById("file-input").onchange = async (e) => {
@@ -401,12 +457,19 @@ async function renderMaterialsTab(project) {
     fd.append("file", file);
     try {
       await api("POST", `/projects/${project.id}/materials`, fd, true);
-      toast("Uploaded — processing in the background");
+      toast("Added to library — processing in the background");
       e.target.value = "";
       loadMaterialsList(project.id, true);
     } catch (err) { toast(err.message, true); }
   };
   loadMaterialsList(project.id, true);
+}
+
+// A short, stable-looking "call number" derived from the material id + filename,
+// purely a library-catalog visual touch (not used for anything functional).
+function callNumber(m) {
+  const ext = (m.filename.split(".").pop() || "pdf").slice(0, 3).toUpperCase();
+  return `M-${String(m.id).padStart(3, "0")}·${ext}`;
 }
 
 let _materialsPollTimer = null;
@@ -416,55 +479,50 @@ async function loadMaterialsList(projectId, startPolling) {
   try { materials = await api("GET", `/projects/${projectId}/materials`); }
   catch (e) { return; }
 
-  const list = document.getElementById("materials-index");
-  if (!list) return; // navigated away
+  const wrap = document.getElementById("library-index");
+  if (!wrap) return; // navigated away
 
-  if (!materials.length) {
-    list.innerHTML = `<p class="hint">No materials uploaded yet — add a PDF above to start building this project's knowledge base.</p>`;
-    return;
-  }
+  const counts = { ready: 0, processing: 0, queued: 0, failed: 0 };
+  materials.forEach(m => { if (counts[m.status] !== undefined) counts[m.status]++; });
 
-  const counts = { ready: 0, processing: 0, failed: 0 };
-  materials.forEach(m => {
-    if (m.status === "ready") counts.ready++;
-    else if (m.status === "failed") counts.failed++;
-    else counts.processing++;
-  });
-
-  list.innerHTML = `
+  const summary = `
     <div class="library-index-summary">
       <div class="count-cell is-ready"><div class="n">${counts.ready}</div><div class="l">Ready</div></div>
-      <div class="count-cell is-processing"><div class="n">${counts.processing}</div><div class="l">Processing</div></div>
+      <div class="count-cell is-processing"><div class="n">${counts.processing + counts.queued}</div><div class="l">Processing</div></div>
       <div class="count-cell is-failed"><div class="n">${counts.failed}</div><div class="l">Failed</div></div>
       <div class="count-cell"><div class="n">${materials.length}</div><div class="l">Total</div></div>
     </div>
+  `;
+
+  wrap.innerHTML = materials.length ? `
+    ${summary}
     <div class="library-grid">
       ${materials.map(m => `
-        <div class="index-card" data-material="${m.id}">
+        <div class="index-card" data-material-id="${m.id}">
           <div class="index-card__flag st-${m.status}"></div>
-          <div class="index-card__code">DOC-${String(m.id).padStart(4, "0")}</div>
+          <button class="index-card__delete" data-delete-id="${m.id}" title="Remove from library" aria-label="Remove ${escapeHtml(m.filename)}">✕</button>
+          <div class="index-card__code">${callNumber(m)}</div>
           <div class="index-card__title">${escapeHtml(m.filename)}</div>
           <div class="index-card__meta">${m.page_count ? m.page_count + " pages · " : ""}${fmtDate(m.created_at)}</div>
           ${m.error_message ? `<div class="index-card__error">${escapeHtml(m.error_message)}</div>` : ""}
           <div class="index-card__status-row">
             <span class="index-card__status-text st-${m.status}">${m.status}</span>
-            <button class="index-card__delete" data-delete="${m.id}" title="Delete material">✕</button>
           </div>
         </div>
       `).join("")}
     </div>
-  `;
+  ` : `${summary}<p class="hint">No materials in the library yet — upload a PDF above to get started.</p>`;
 
-  list.querySelectorAll("[data-delete]").forEach(btn => {
+  wrap.querySelectorAll("[data-delete-id]").forEach(btn => {
     btn.onclick = async () => {
-      const materialId = btn.dataset.delete;
-      const card = list.querySelector(`[data-material="${materialId}"]`);
-      const name = card?.querySelector(".index-card__title")?.textContent || "this material";
-      if (!confirm(`Delete "${name}"? This removes the file and its search index. Quiz history and mastery are kept.`)) return;
+      const id = btn.getAttribute("data-delete-id");
+      const card = wrap.querySelector(`.index-card[data-material-id="${id}"]`);
+      const name = card ? card.querySelector(".index-card__title").textContent : "this material";
+      if (!confirm(`Remove "${name}" from the library? This can't be undone.`)) return;
       try {
-        await api("DELETE", `/projects/${projectId}/materials/${materialId}`);
-        toast("Material deleted");
-        loadMaterialsList(projectId, false);
+        await api("DELETE", `/projects/${projectId}/materials/${id}`);
+        toast("Removed from library");
+        loadMaterialsList(projectId, true);
       } catch (err) { toast(err.message, true); }
     };
   });
@@ -475,18 +533,30 @@ async function loadMaterialsList(projectId, startPolling) {
   }
 }
 
-/* ---- Tutor ---- */
+/* ---- Tutor: ChatGPT-style chat ---- */
 async function renderTutorTab(project) {
   const content = document.getElementById("content");
   content.innerHTML = `
     <div class="tutor-shell">
       <div class="tutor-log" id="tutor-log"><div class="loading">Loading conversation…</div></div>
-      <form class="tutor-input-row" id="tutor-form">
-        <textarea id="tutor-input" placeholder="Ask about your material…" required></textarea>
-        <button class="btn" type="submit">Ask</button>
-      </form>
+      <div class="tutor-input-wrap">
+        <form class="tutor-input-row" id="tutor-form">
+          <textarea id="tutor-input" placeholder="Ask about your material… (Enter to send, Shift+Enter for a new line)" rows="1" required></textarea>
+          <button class="btn" type="submit" title="Send" aria-label="Send">↑</button>
+        </form>
+      </div>
     </div>
   `;
+  const textarea = document.getElementById("tutor-input");
+  const autoGrow = () => { textarea.style.height = "auto"; textarea.style.height = Math.min(textarea.scrollHeight, 128) + "px"; };
+  textarea.addEventListener("input", autoGrow);
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById("tutor-form").requestSubmit();
+    }
+  });
+
   let history = [];
   try { history = await api("GET", `/projects/${project.id}/tutor/history`); } catch (e) {}
   const log = document.getElementById("tutor-log");
@@ -498,10 +568,15 @@ async function renderTutorTab(project) {
     const question = input.value.trim();
     if (!question) return;
     input.value = "";
+    autoGrow();
     history.push({ role: "user", content: question, citations: [], insufficient_evidence: false, created_at: new Date().toISOString() });
     renderTutorLog(log, history);
     const thinkingId = "thinking-" + Date.now();
-    log.insertAdjacentHTML("beforeend", `<div class="msg assistant" id="${thinkingId}"><div class="msg-bubble">Thinking…</div></div>`);
+    log.insertAdjacentHTML("beforeend", `
+      <div class="chat-row assistant" id="${thinkingId}">
+        <div class="chat-avatar assistant">AI</div>
+        <div class="chat-content"><div class="chat-bubble-text hint">Thinking…</div></div>
+      </div>`);
     log.scrollTop = log.scrollHeight;
     try {
       const res = await api("POST", `/projects/${project.id}/tutor/ask`, { question });
@@ -521,11 +596,12 @@ function renderTutorLog(log, history) {
     return;
   }
   log.innerHTML = history.map(m => `
-    <div class="msg ${m.role} ${m.insufficient_evidence ? "insufficient" : ""}">
-      <div class="msg-bubble">
-        ${escapeHtml(m.content).replace(/\n/g, "<br>")}
-        ${m.insufficient_evidence ? `<div class="hint" style="margin-top:.5em">⚠ Not enough evidence in your materials to answer this reliably.</div>` : ""}
-        ${(m.citations && m.citations.length) ? `<div class="citations">${m.citations.map(c => `<span class="citation-chip">${escapeHtml(c.source)} · p.${c.page}</span>`).join("")}</div>` : ""}
+    <div class="chat-row ${m.role} ${m.insufficient_evidence ? "insufficient" : ""}">
+      <div class="chat-avatar ${m.role}">${m.role === "user" ? "You" : "AI"}</div>
+      <div class="chat-content">
+        <div class="chat-bubble-text">${escapeHtml(m.content).replace(/\n/g, "<br>")}</div>
+        ${m.insufficient_evidence ? `<div class="chat-evidence-note">⚠ Not enough evidence in your materials to answer this reliably.</div>` : ""}
+        ${(m.citations && m.citations.length) ? `<div class="chat-citations">${m.citations.map(c => `<span class="citation-chip">${escapeHtml(c.source)} · p.${c.page}</span>`).join("")}</div>` : ""}
       </div>
     </div>
   `).join("");
@@ -651,6 +727,13 @@ async function renderQuizSummary(project) {
 }
 
 /* ---- Mastery & Growth ---- */
+function masteryTier(score) {
+  if (score >= 70) return "";
+  if (score >= 40) return "tier-mid";
+  return "tier-low";
+}
+const TREND_ICON = { improving: "↗", stable: "→", needs_attention: "↘" };
+
 async function renderMasteryTab(project) {
   const content = document.getElementById("content");
   content.innerHTML = `<div class="loading">Loading mastery…</div>`;
@@ -670,7 +753,7 @@ async function renderMasteryTab(project) {
         ${mastery.length ? mastery.map(c => `
           <div class="mastery-row">
             <div class="mastery-name">${escapeHtml(c.name)}</div>
-            <div class="mastery-track"><div class="mastery-fill ${c.mastery_score < 50 ? "attention" : ""}" style="width:${c.mastery_score}%"></div></div>
+            <div class="mastery-track"><div class="mastery-fill ${masteryTier(c.mastery_score)}" style="width:${c.mastery_score}%"></div></div>
             <div class="mastery-pct">${Math.round(c.mastery_score)}%</div>
           </div>
         `).join("") : `<p class="hint">No concepts tracked yet — upload material and take a quiz.</p>`}
@@ -679,8 +762,8 @@ async function renderMasteryTab(project) {
         <h3>Growth</h3>
         ${growth.length ? growth.map(g => `
           <div class="mastery-row">
-            <div class="mastery-name">${escapeHtml(g.concept)} <span class="trend-tag trend-${g.trend}">${g.trend.replace("_", " ")}</span></div>
-            <div class="mastery-track"><div class="mastery-fill" style="width:${g.mastery_score}%"></div></div>
+            <div class="mastery-name">${escapeHtml(g.concept)} <span class="trend-tag trend-${g.trend}">${TREND_ICON[g.trend] || ""} ${g.trend.replace("_", " ")}</span></div>
+            <div class="mastery-track"><div class="mastery-fill ${masteryTier(g.mastery_score)}" style="width:${g.mastery_score}%"></div></div>
             <div class="mastery-pct">${Math.round(g.mastery_score)}%</div>
           </div>
         `).join("") : `<p class="hint">Not enough quiz evidence yet to show growth.</p>`}
@@ -727,7 +810,7 @@ async function renderProjectAnalyticsTab(project) {
         <h3>Concept mastery snapshot</h3>
         ${a.concept_mastery.length ? a.concept_mastery.map(c => `
           <div class="mastery-row"><div class="mastery-name">${escapeHtml(c.concept)}</div>
-          <div class="mastery-track"><div class="mastery-fill" style="width:${c.mastery}%"></div></div>
+          <div class="mastery-track"><div class="mastery-fill ${masteryTier(c.mastery)}" style="width:${c.mastery}%"></div></div>
           <div class="mastery-pct">${Math.round(c.mastery)}%</div></div>
         `).join("") : `<p class="hint">No concepts tracked yet.</p>`}
       </div>
@@ -834,10 +917,7 @@ async function renderAdmin() {
 }
 
 /* ---------------- Boot ---------------- */
-initLandingScreen();
 initAuthScreen();
 if (state.token && state.user) {
-  boot().catch(() => showLanding());
-} else {
-  showLanding();
+  boot().catch(() => logout());
 }
