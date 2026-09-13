@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Study — AI Study Companion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing-shell" class="landing-shell">
+  <nav class="landing-nav">
+    <div class="wordmark">Study<small>AI Study Companion</small></div>
+    <button class="btn secondary btn-sm" id="landing-login-btn">Log in</button>
+  </nav>
+
+  <section class="landing-hero">
+    <span class="landing-kicker">Learning workspace, not a chatbot</span>
+    <h1>Learn with a Tutor that only speaks from <em>your</em> material.</h1>
+    <p>Upload your notes or a textbook chapter. Ask questions and get cited answers grounded in what you actually gave it. Take adaptive quizzes that target your weakest concepts. Track mastery and growth over time, and get told exactly what to study next.</p>
+    <div class="landing-cta-row">
+      <button class="btn" id="landing-start-btn">Get started — it's free</button>
+      <button class="btn secondary" id="landing-login-btn-2">I already have an account</button>
+    </div>
+    <p class="landing-hint">No credit card. First person to sign up becomes the <button id="landing-admin-hint-btn" type="button">admin</button>.</p>
+  </section>
+
+  <div class="landing-loop">
+    <div class="landing-loop-track">
+      <span class="landing-loop-step">Upload material</span><span class="landing-loop-arrow">→</span>
+      <span class="landing-loop-step">Ask the Tutor</span><span class="landing-loop-arrow">→</span>
+      <span class="landing-loop-step">Adaptive quiz</span><span class="landing-loop-arrow">→</span>
+      <span class="landing-loop-step">Mastery updates</span><span class="landing-loop-arrow">→</span>
+      <span class="landing-loop-step">Next recommendation</span>
+    </div>
+  </div>
+
+  <div class="landing-features">
+    <div class="landing-feature-card">
+      <div class="n">01</div>
+      <h3>Grounded Tutor</h3>
+      <p>Every answer cites the source document and page. If your material doesn't cover something, it says so instead of guessing.</p>
+    </div>
+    <div class="landing-feature-card">
+      <div class="n">02</div>
+      <h3>Adaptive quizzes</h3>
+      <p>Multiple-choice and open-ended questions targeted at your weakest concepts — not just "wrong, so easier."</p>
+    </div>
+    <div class="landing-feature-card">
+      <div class="n">03</div>
+      <h3>Mastery &amp; growth</h3>
+      <p>Per-concept mastery scores that update from real quiz evidence, with a trend for what's improving or needs attention.</p>
+    </div>
+    <div class="landing-feature-card">
+      <div class="n">04</div>
+      <h3>Always a next step</h3>
+      <p>A recommendation engine turns your activity into one concrete thing to study next.</p>
+    </div>
+  </div>
+
+  <div class="landing-footer">AI Study Companion — a learning workspace, built end to end.</div>
+</div>
+
+<!-- AUTH -->
+<div id="auth-shell" class="auth-shell" style="display:none">
+  <div class="auth-card">
+    <button type="button" id="auth-back-btn" class="btn secondary btn-sm" style="margin-bottom:1em">← Back</button>
+    <div class="auth-wordmark">Study</div>
+    <div class="auth-tagline">Upload your material, learn with a grounded Tutor, get quizzed on what you actually know, and see what to do next.</div>
+    <div id="auth-error"></div>
+    <div class="auth-toggle">
+      <button id="tab-login" class="active">Log in</button>
+      <button id="tab-register">Create account</button>
+    </div>
+    <form id="login-form">
+      <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="email"></div>
+      <div class="field"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div>
+      <button type="submit" class="btn" style="width:100%">Log in</button>
+    </form>
+    <form id="register-form" style="display:none">
+      <div class="field"><label>Name</label><input type="text" name="full_name" required></div>
+      <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="email"></div>
+      <div class="field"><label>Password (min 8 characters)</label><input type="password" name="password" required minlength="8" autocomplete="new-password"></div>
+      <button type="submit" class="btn" style="width:100%">Create account</button>
+    </form>
+    <p class="hint" style="margin-top:1em">First person to register becomes the admin.</p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="shell" class="shell" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="wordmark">Study<small>AI Study Companion</small></div>
+    </div>
+    <div class="nav-scroll" id="space-nav"></div>
+    <button class="btn secondary btn-sm new-space-btn" id="new-space-btn">+ New space</button>
+    <div class="sidebar-footer">
+      <div class="user-line" id="user-line"></div>
+      <a class="admin-link" id="admin-link" style="display:none">Admin dashboard →</a>
+      <a class="admin-link" id="global-analytics-link">Global analytics →</a>
+      <button class="btn secondary btn-sm" id="logout-btn" style="width:100%">Log out</button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="crumb" id="crumb"></div>
+        <div class="page-title" id="page-title">Home</div>
+      </div>
+      <div id="topbar-actions"></div>
+    </div>
+    <div class="tabs" id="tabs" style="display:none"></div>
+    <div class="content" id="content"><div class="loading">Loading…</div></div>
+  </div>
+</div>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>
