@@ -103,6 +103,25 @@ function showModal({ title, subtitle, fieldsHtml, submitLabel, onSubmit }) {
   if (firstInput) firstInput.focus();
 }
 
+/* ---------------- Landing ---------------- */
+function showAuthScreen(tab) {
+  document.getElementById("landing-shell").style.display = "none";
+  document.getElementById("auth-shell").style.display = "flex";
+  switchAuthTab(tab);
+}
+function showLandingScreen() {
+  document.getElementById("auth-shell").style.display = "none";
+  document.getElementById("landing-shell").style.display = "block";
+}
+function initLandingScreen() {
+  document.getElementById("landing-start-btn").onclick = () => showAuthScreen("register");
+  document.getElementById("landing-login-btn").onclick = () => showAuthScreen("login");
+  document.getElementById("landing-login-btn-2").onclick = () => showAuthScreen("login");
+  document.getElementById("auth-back-btn").onclick = showLandingScreen;
+  document.getElementById("landing-admin-hint-btn").onclick = () =>
+    toast("The very first account created on this deployment automatically becomes the admin.");
+}
+
 /* ---------------- Auth ---------------- */
 function initAuthScreen() {
   document.getElementById("tab-login").onclick = () => switchAuthTab("login");
@@ -147,11 +166,13 @@ function logout() {
   state.token = null; state.user = null;
   localStorage.removeItem("sc_token"); localStorage.removeItem("sc_user");
   document.getElementById("shell").style.display = "none";
-  document.getElementById("auth-shell").style.display = "flex";
+  document.getElementById("auth-shell").style.display = "none";
+  document.getElementById("landing-shell").style.display = "block";
 }
 
 /* ---------------- Boot / shell ---------------- */
 async function boot() {
+  document.getElementById("landing-shell").style.display = "none";
   document.getElementById("auth-shell").style.display = "none";
   document.getElementById("shell").style.display = "flex";
   document.getElementById("user-line").textContent = state.user.full_name || state.user.email;
@@ -917,6 +938,7 @@ async function renderAdmin() {
 }
 
 /* ---------------- Boot ---------------- */
+initLandingScreen();
 initAuthScreen();
 if (state.token && state.user) {
   boot().catch(() => logout());
